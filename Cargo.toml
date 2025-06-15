@@ -1,0 +1,12 @@
+[package]
+name = "hashindex-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+argh = "0.1.13"
+async-task = "4.7.1"
+futures = "0.3.31"
+num_cpus = "1.17.0"
+smol = {version = "2"}
+twox-hash = "2.1.1"
