@@ -2,6 +2,7 @@
 name = "hashindex-rs"
 version = "0.1.0"
 edition = "2024"
+license-file = "COPYING"
 
 [dependencies]
 argh = "0.1.13"
