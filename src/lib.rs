@@ -59,7 +59,7 @@ pub mod hashindex_rs {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if ...
     pub async fn run_workers(
         label: String,
         delimiter: String,
@@ -111,6 +111,10 @@ pub mod hashindex_rs {
     }
 
     async fn calc_hash(path: &PathBuf) -> Result<u64, Box<dyn std::error::Error>> {
+        calc_hash_xxh64(path).await
+    }
+
+    async fn calc_hash_xxh64(path: &PathBuf) -> Result<u64, Box<dyn std::error::Error>> {
         let mut file = File::open(path).await?;
         let mut hasher = XxHash64::default();
         let mut buffer: [u8; 8192] = [0; 8192]; // Read in 8KB chunks
