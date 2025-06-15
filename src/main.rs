@@ -51,6 +51,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             hashindex_rs::run_workers(args.label.into(), delimiter, receive, number_of_workers),
             hashindex_rs::explore_path(&args.base_path, sender),
         );
+
+        if let Err(e) = _explorer {
+            eprintln!("Error exploring path: {}", e);
+        }
+        if let Err(e) = _workers {
+            eprintln!("Error running workers: {}", e);
+        }
     });
 
     Ok(())
