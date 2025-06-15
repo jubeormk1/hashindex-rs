@@ -2,22 +2,25 @@
 
 A cross-platform tool for generating 64-bit non-cryptographic hashes for all files in a given directory with the purpose in mind to help in file deduplication tasks.
 
+## Warnings
+
+- Alpha version: **This crate is a work in progress**
+- This tool is not collision resistant but it is fast.
+- The generated hash is a **64-bit non-cryptographic hash**: It is not suitable for security-sensitive applications. Use cryptographic hashing libraries (e.g., SHA-256) if you require secure hashing.
+
+
 ## Overview
 
 This tool provides an utility to recursively explore a directory and generate 64-bit hashes for each file. It is designed for lightweight use cases such as file comparison or integrity checks, but **not** for cryptographic purposes.
 
-### Warnings
-
-- **This crate is a work in progress**
-- The generated hash is a **64-bit non-cryptographic hash**: It is not suitable for security-sensitive applications. Use cryptographic hashing libraries (e.g., SHA-256) if you require secure hashing.
-
 ## Features
 
-- **Cross-Platform**: It should work on Windows, macOS, and Linux.
-- **Fast Hashing**: Generates 64-bit hashes quickly for large directories.
-- **Recursive Exploration**: Scans all files in subdirectories keeping the heap footprint small avoiding recursive function calls.
+- **Fast Hashing**: Generates 64-bit hashes quickly for large directories (See [xxh64](https://crates.io/crates/xxhash-rust)).
+- **Cross-Platform**: It should work on Linux, Windows, and Mac(Not tested)?.
+- **Cross-Architecture**: It should work on x64, arm64(Not tested)?.
 - **Minimal Memory footprint**: Uses buffered reading to minimize memory usage.
 - **Async multi task**: Runs a number of tasks in parallel matching the cores in your system to speed up the process.
+- **Recursive Exploration**: Scans all files in subdirectories keeping the heap footprint small by avoiding recursive function calls.
 
 ## Command Line Usage
 
