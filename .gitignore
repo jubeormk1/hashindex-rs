@@ -1,0 +1,23 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Cargo build files
+Cargo.lock
+
+# VSCode settings
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Debug files
+*.exe
+*.out
+*.profdata
+
+# IDE-specific files
+.idea/
+*.swp
+*.swo
