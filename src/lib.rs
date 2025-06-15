@@ -93,7 +93,13 @@ pub mod hashindex_rs {
                 if !path_buf.is_file() {
                     continue;
                 } else {
-                    let hash = calc_hash(&path_buf).await.unwrap();
+                    let hash = match calc_hash(&path_buf).await {
+                        Ok(hash) => hash,
+                        Err(err) => {
+                            eprintln!("Failed to calculate hash for {path_buf:?}: {err}");
+                            continue;
+                        }
+                    };
 
                     println!("{label:} {delimiter} {hash:} {delimiter} {path_buf:?}");
                 }
@@ -124,9 +130,15 @@ pub mod hashindex_rs {
 #[cfg(test)]
 mod tests {
 
+    use std::fs;
+
     use crate::hashindex_rs;
     use futures::join;
     use smol::channel;
+    use tempfile::NamedTempFile;
+
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
 
     fn prepare_channel<T>() -> (channel::Sender<T>, channel::Receiver<T>) {
         channel::bounded(1)
@@ -148,7 +160,10 @@ mod tests {
 
     #[test]
     fn valid_path() {
-        let path = "./";
+        let (_, temp_path) = make_temp_file();
+
+        let path = temp_path.to_str().unwrap();
+        // let path = "./";
         let (sender, receiver) = prepare_channel();
         let delimiter = ",";
 
@@ -161,16 +176,38 @@ mod tests {
         });
     }
 
+    #[cfg(unix)]
     #[test]
     fn no_path_permissions() {
-        todo!(
-            "Not implemented: What happens if the path is good but the user does not have enough permissions to read it"
-        );
+        // Create a temporary file with random content
+        let (_named_temp_file, temp_path) = make_temp_file();
 
-        // let path_string = "/root/";
-        // future::block_on(async {
-        //     let explore_result = hashindex_rs::explore_path(path_string).await;
-        //     assert!(explore_result.is_ok());
-        // });
+        // Change file permissions to make it unreadable
+        let mut permissions = fs::metadata(&temp_path).unwrap().permissions();
+        permissions.set_mode(0o000); // No permissions
+        fs::set_permissions(&temp_path, permissions).unwrap();
+
+        let delimiter = ",";
+        let (sender, receiver) = prepare_channel();
+
+        smol::block_on(async {
+            let (_, explore_result) = join!(
+                hashindex_rs::run_workers("label".into(), delimiter.into(), receiver, 1),
+                hashindex_rs::explore_path(&temp_path.to_str().unwrap(), sender),
+            );
+            assert!(explore_result.is_ok()); // The program should not panic
+        });
+
+        // Cleanup: Restore permissions to allow deletion
+        let mut permissions = fs::metadata(&temp_path).unwrap().permissions();
+        permissions.set_mode(0o644); // Read/write for owner, read for others
+        fs::set_permissions(&temp_path, permissions).unwrap();
+    }
+
+    fn make_temp_file() -> (NamedTempFile, std::path::PathBuf) {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_path = temp_file.path().to_path_buf();
+        fs::write(&temp_path, "random content").unwrap();
+        (temp_file, temp_path)
     }
 }
