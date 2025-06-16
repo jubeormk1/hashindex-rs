@@ -11,7 +11,9 @@ pub mod hashindex_rs {
         io::{Error, ErrorKind},
         path::PathBuf,
     };
-    use twox_hash::XxHash64;
+    // use twox_hash::XxHash64;
+    use xxhash_rust::xxh3::Xxh3;
+    use xxhash_rust::xxh64::Xxh64;
 
     /// Initiates a path explorer on the given path and sends the found files to
     /// the workers using the provided channel.
@@ -110,13 +112,14 @@ pub mod hashindex_rs {
         }
     }
 
-    async fn calc_hash(path: &PathBuf) -> Result<u64, Box<dyn std::error::Error>> {
-        calc_hash_xxh64(path).await
+    async fn calc_hash(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
+        // calc_hash_xxh64(path).await
+        calc_hash_xxh3(path).await
     }
 
-    async fn calc_hash_xxh64(path: &PathBuf) -> Result<u64, Box<dyn std::error::Error>> {
+    async fn calc_hash_xxh64(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
         let mut file = File::open(path).await?;
-        let mut hasher = XxHash64::default();
+        let mut hasher = Xxh64::new(0);
         let mut buffer: [u8; 8192] = [0; 8192]; // Read in 8KB chunks
 
         loop {
@@ -127,7 +130,24 @@ pub mod hashindex_rs {
             hasher.write(&buffer[..bytes_read]);
         }
 
-        Ok(hasher.finish())
+        let hash = format!("{:016X}", hasher.digest());
+        Ok(hash)
+    }
+
+    async fn calc_hash_xxh3(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
+        let mut file = File::open(path).await?;
+        let mut hasher = Xxh3::new();
+        let mut buffer: [u8; 8192] = [0; 8192]; // Read in 8KB chunks
+
+        loop {
+            let bytes_read = file.read(&mut buffer).await?;
+            if bytes_read == 0 {
+                break; // End of file
+            }
+            hasher.write(&buffer[..bytes_read]);
+        }
+
+        Ok(format!("{:032X}", hasher.digest128()))
     }
 }
 
