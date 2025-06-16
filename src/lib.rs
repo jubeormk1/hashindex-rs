@@ -1,3 +1,4 @@
+mod hasher_wrapper;
 pub mod hashindex_rs {
 
     use futures::io::AsyncReadExt;
@@ -7,13 +8,26 @@ pub mod hashindex_rs {
         stream::StreamExt,
     };
     use std::{
-        hash::Hasher,
         io::{Error, ErrorKind},
         path::PathBuf,
     };
-    // use twox_hash::XxHash64;
-    use xxhash_rust::xxh3::Xxh3;
-    use xxhash_rust::xxh64::Xxh64;
+
+    use crate::hasher_wrapper::{HasherWrapper, new_xxh3, new_xxh64};
+
+    #[derive(Clone)]
+    enum HashAlgorithm {
+        Xxh64,
+        Xxh3,
+    }
+    impl HashAlgorithm {
+        fn from_str(s: &str) -> Option<Self> {
+            match s.to_lowercase().as_str() {
+                "xxh64" => Some(HashAlgorithm::Xxh64),
+                "xxh3" => Some(HashAlgorithm::Xxh3),
+                _ => None,
+            }
+        }
+    }
 
     /// Initiates a path explorer on the given path and sends the found files to
     /// the workers using the provided channel.
@@ -65,16 +79,37 @@ pub mod hashindex_rs {
     pub async fn run_workers(
         label: String,
         delimiter: String,
+        hash_algorithms: Vec<&str>,
         receive: channel::Receiver<PathBuf>,
         number_of_workers: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        //TODO: Make this sanitation more compact
+        let number_of_workers = if number_of_workers == 0 {
+            1
+        } else {
+            number_of_workers
+        };
+
         let mut workers = Vec::with_capacity(number_of_workers);
+
+        let hash_algorithms: Vec<HashAlgorithm> = hash_algorithms
+            .into_iter()
+            .filter_map(HashAlgorithm::from_str)
+            .collect();
+
         for _ in 0..number_of_workers {
             let task_receiver = receive.clone();
             let task_label = label.to_string();
             let task_delimiter = delimiter.clone();
+            let task_hash_algorithms = hash_algorithms.clone();
             workers.push(smol::spawn(async move {
-                work_print(task_label, task_delimiter, task_receiver).await;
+                work_print(
+                    task_label,
+                    task_delimiter,
+                    task_hash_algorithms,
+                    task_receiver,
+                )
+                .await;
             }));
         }
 
@@ -88,6 +123,7 @@ pub mod hashindex_rs {
     async fn work_print(
         label: String,
         delimiter: String,
+        task_hash_algorithms: Vec<HashAlgorithm>,
         task_receiver: channel::Receiver<PathBuf>,
     ) {
         loop {
@@ -95,15 +131,15 @@ pub mod hashindex_rs {
                 if !path_buf.is_file() {
                     continue;
                 } else {
-                    let hash = match calc_hash(&path_buf).await {
-                        Ok(hash) => hash,
+                    let hash = match calc_hashes(&path_buf, &task_hash_algorithms).await {
+                        Ok(hash) => hash.join(&delimiter),
                         Err(err) => {
                             eprintln!("Failed to calculate hash for {path_buf:?}: {err}");
                             continue;
                         }
                     };
 
-                    println!("{label:} {delimiter} {hash:} {delimiter} {path_buf:?}");
+                    println!("{label:}{delimiter}{hash:}{delimiter}{path_buf:?}");
                 }
             };
             if task_receiver.is_closed() {
@@ -112,42 +148,35 @@ pub mod hashindex_rs {
         }
     }
 
-    async fn calc_hash(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
-        // calc_hash_xxh64(path).await
-        calc_hash_xxh3(path).await
-    }
-
-    async fn calc_hash_xxh64(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
+    /// Computes the list of hashes provided using the same stream saving expensive access time
+    async fn calc_hashes(
+        path: &PathBuf,
+        task_hash_algorithms: &Vec<HashAlgorithm>,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let mut file = File::open(path).await?;
-        let mut hasher = Xxh64::new(0);
-        let mut buffer: [u8; 8192] = [0; 8192]; // Read in 8KB chunks
+        let mut hashers = vec![];
+        for algorithm in task_hash_algorithms {
+            let new_hasher = match algorithm {
+                HashAlgorithm::Xxh64 => HasherWrapper::Xxh64(new_xxh64()),
+                HashAlgorithm::Xxh3 => HasherWrapper::Xxh3(new_xxh3()),
+            };
+            hashers.push(new_hasher);
+        }
 
+        let mut buffer: [u8; 8192] = [0; 8192];
         loop {
             let bytes_read = file.read(&mut buffer).await?;
             if bytes_read == 0 {
                 break; // End of file
             }
-            hasher.write(&buffer[..bytes_read]);
+
+            hashers
+                .iter_mut()
+                .for_each(|hasher| hasher.update(&buffer[..bytes_read]));
         }
 
-        let hash = format!("{:016X}", hasher.digest());
-        Ok(hash)
-    }
-
-    async fn calc_hash_xxh3(path: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
-        let mut file = File::open(path).await?;
-        let mut hasher = Xxh3::new();
-        let mut buffer: [u8; 8192] = [0; 8192]; // Read in 8KB chunks
-
-        loop {
-            let bytes_read = file.read(&mut buffer).await?;
-            if bytes_read == 0 {
-                break; // End of file
-            }
-            hasher.write(&buffer[..bytes_read]);
-        }
-
-        Ok(format!("{:032X}", hasher.digest128()))
+        let hashes: Vec<String> = hashers.iter().map(|hash| hash.finish()).collect();
+        Ok(hashes)
     }
 }
 
@@ -172,10 +201,18 @@ mod tests {
     fn bad_path() {
         let path = "invalid Path which will not resolve in any real path";
         let delimiter = ",";
+        let hash_algorithms = vec!["xxh64", "xxh3"];
+
         let (sender, receiver) = prepare_channel();
         smol::block_on(async {
             let (_, explore_result) = join!(
-                hashindex_rs::run_workers("label".into(), delimiter.into(), receiver, 1),
+                hashindex_rs::run_workers(
+                    "label".into(),
+                    delimiter.into(),
+                    hash_algorithms,
+                    receiver,
+                    1
+                ),
                 hashindex_rs::explore_path(&path, sender),
             );
             assert!(explore_result.is_err());
@@ -187,13 +224,19 @@ mod tests {
         let (_, temp_path) = make_temp_file();
 
         let path = temp_path.to_str().unwrap();
-        // let path = "./";
-        let (sender, receiver) = prepare_channel();
         let delimiter = ",";
+        let hash_algorithms = vec!["xxh64", "xxh3"];
 
+        let (sender, receiver) = prepare_channel();
         smol::block_on(async {
             let (_, explore_result) = join!(
-                hashindex_rs::run_workers("label".into(), delimiter.into(), receiver, 1),
+                hashindex_rs::run_workers(
+                    "label".into(),
+                    delimiter.into(),
+                    hash_algorithms,
+                    receiver,
+                    1
+                ),
                 hashindex_rs::explore_path(&path, sender),
             );
             assert!(explore_result.is_ok());
@@ -210,13 +253,19 @@ mod tests {
         let mut permissions = fs::metadata(&temp_path).unwrap().permissions();
         permissions.set_mode(0o000); // No permissions
         fs::set_permissions(&temp_path, permissions).unwrap();
-
         let delimiter = ",";
+        let hash_algorithms = vec!["xxh64", "xxh3"];
         let (sender, receiver) = prepare_channel();
 
         smol::block_on(async {
             let (_, explore_result) = join!(
-                hashindex_rs::run_workers("label".into(), delimiter.into(), receiver, 1),
+                hashindex_rs::run_workers(
+                    "label".into(),
+                    delimiter.into(),
+                    hash_algorithms,
+                    receiver,
+                    1
+                ),
                 hashindex_rs::explore_path(&temp_path.to_str().unwrap(), sender),
             );
             assert!(explore_result.is_ok()); // The program should not panic
@@ -229,7 +278,7 @@ mod tests {
     }
 
     fn make_temp_file() -> (NamedTempFile, std::path::PathBuf) {
-        let mut temp_file = NamedTempFile::new().unwrap();
+        let temp_file = NamedTempFile::new().unwrap();
         let temp_path = temp_file.path().to_path_buf();
         fs::write(&temp_path, "random content").unwrap();
         (temp_file, temp_path)
