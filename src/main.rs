@@ -30,8 +30,6 @@ struct Arguments {
     // #[argh(switch, short = 's')]
     // std_out: bool,
     // TODO: Add an option to save to a file or std. For now just stdout
-    // TODO: Add a parameter to choose the hash algorithm
-    // TODO: Add a parameter to choose the number of workers
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,13 +40,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => ",".into(),
     };
 
+    // TODO: Add a parameter to choose the hash algorithm
+    let hash_algorithms = vec!["xxh64", "xxh3"];
+
+    // TODO: Add a parameter to choose the number of workers
     let number_of_workers = num_cpus::get();
 
-    // create a channel to send the found files to the workers
+    // TODO: List the file size as another field as a number of bytes
+
     let (sender, receive) = channel::bounded(number_of_workers);
+
     smol::block_on(async {
         let (_workers, _explorer) = join!(
-            hashindex_rs::run_workers(args.label.into(), delimiter, receive, number_of_workers),
+            hashindex_rs::run_workers(
+                args.label.into(),
+                delimiter,
+                hash_algorithms,
+                receive,
+                number_of_workers
+            ),
             hashindex_rs::explore_path(&args.base_path, sender),
         );
 
