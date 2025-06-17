@@ -21,7 +21,10 @@ pub mod hashindex_rs {
 
     use crate::hasher_wrapper::{HasherWrapper, new_xxh3, new_xxh64};
 
-    // TODO: Remove this duplicity
+    // TODO: Remove this duplicity with the module hasher_wrapper
+    // It implies the same information as we do with the mentioned module
+    // I implemented it when I was experimenting with more than one hash algorithm
+    // possibly in the commit: e8334fab206ef3469ada367dae0b88b89f635341
     #[derive(Clone)]
     enum HashAlgorithm {
         Xxh64,
