@@ -3,6 +3,9 @@ name = "hashindex-rs"
 version = "0.2.0"
 edition = "2024"
 license-file = "COPYING"
+repository = "http://github.com/jubeormk1/hashindex-rs"
+authors = ["Julio Beltran Ortega"]
+
 
 [dependencies]
 argh = "0.1.13"

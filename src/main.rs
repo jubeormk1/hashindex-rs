@@ -5,11 +5,12 @@ use smol::channel;
 
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(
-    description = "\n hashindex is a tool to hash all the contained filesin a path, add an identifier for the files in the given folder.
+    description = "\n HASHINDEX-RS is a tool to hash all the contained files in the provided path.
 \nFeatures:
-\n - It sends to stdout the results in comma separated as [label], [hash], [path]
+\n - It sends to stdout the results in comma separated as [label], [hash(s)], [size (kbs)], [path]
 \n - It runs a number of tasks equal to the number of cores of the system
 \n - It ignores links
+\n - See the optional arguments for possible customisations
 \n`
 \nWarning: The hash created are not cryptographically strong It calculates a 64 bit hash for each item.
 \nWarning: This tool will not follow links.
@@ -36,11 +37,26 @@ struct Arguments {
     /// number of jobs to use to compute hashes. defaults to the number of cores
     #[argh(option, short = 'j')]
     jobs: Option<usize>,
+
+    // TODO: Make the version argument overrides even the positional arguments
+    /// prints the version of the application and exits. It will ignore any other parameter
+    #[argh(switch, short = 'v')]
+    version: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Arguments = argh::from_env();
 
+    if args.version {
+        println!(
+            "{} v{}",
+            env!("CARGO_PKG_NAME").to_ascii_uppercase(),
+            env!("CARGO_PKG_VERSION")
+        );
+        println!("Authors: {}", env!("CARGO_PKG_AUTHORS"));
+        println!("Repository: {}", env!("CARGO_PKG_REPOSITORY"));
+        std::process::exit(0);
+    }
     let delimiter = match args.delimiter {
         Some(delimiter) => delimiter,
         None => ",".into(),
