@@ -10,5 +10,7 @@ async-task = "4.7.1"
 futures = "0.3.31"
 num_cpus = "1.17.0"
 smol = {version = "2"}
+strum = "0.27.1"
+strum_macros = "0.27.1"
 tempfile = "3.20.0"
 xxhash-rust = {version = "0.8.12", features = ["xxh3", "xxh64"]}

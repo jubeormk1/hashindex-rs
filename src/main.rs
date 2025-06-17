@@ -12,7 +12,8 @@ use smol::channel;
 \n - It ignores links
 \n`
 \nWarning: The hash created are not cryptographically strong It calculates a 64 bit hash for each item.
-\nWarning: This tool will not follow links."
+\nWarning: This tool will not follow links.
+\nWarning: The order of the hash map presented will not necesarily be deterministic"
 )]
 struct Arguments {
     /// the base path to explore
@@ -26,10 +27,11 @@ struct Arguments {
     /// the field delitimer. It will accept a string
     #[argh(option, short = 'd')]
     delimiter: Option<String>,
-    // /// print results to std out
-    // #[argh(switch, short = 's')]
-    // std_out: bool,
-    // TODO: Add an option to save to a file or std. For now just stdout
+
+    /// list of hash algorithms to use. default algorithm `xxh3`. Order matters choose from xxh64, xxh3.
+    /// use comma separater list such as --hash-list xxh64,xxh3 or --hash-list "xxh64, xxh3"
+    #[argh(option, short = 'h')]
+    hash_list: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -40,8 +42,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => ",".into(),
     };
 
-    // TODO: Add a parameter to choose the hash algorithm
-    let hash_algorithms = vec!["xxh64", "xxh3"];
+    let hash_algorithms = match args.hash_list {
+        Some(hl) => {
+            let (valid_hash, invalid_hash) = hashindex_rs::check_hash(&hl);
+            if !invalid_hash.is_empty() {
+                eprintln!("Provided unimplemented hash algorithms: {:?}", invalid_hash);
+                eprintln!(
+                    "Implemented hash algorithms: {:?}",
+                    hashindex_rs::hash_variants()
+                );
+                std::process::exit(1);
+            }
+            valid_hash
+        }
+        None => vec![hashindex_rs::default_hash()],
+    };
 
     // TODO: Add a parameter to choose the number of workers
     let number_of_workers = num_cpus::get();

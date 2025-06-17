@@ -1,5 +1,12 @@
 mod hasher_wrapper;
+
 pub mod hashindex_rs {
+
+    /// I want to
+    /// Re-exported to make it easier to validate available hash algorithms
+    pub use crate::hasher_wrapper::check_hash;
+    pub use crate::hasher_wrapper::default_hash;
+    pub use crate::hasher_wrapper::variants as hash_variants;
 
     use futures::io::AsyncReadExt;
     use smol::{
@@ -14,13 +21,22 @@ pub mod hashindex_rs {
 
     use crate::hasher_wrapper::{HasherWrapper, new_xxh3, new_xxh64};
 
+    // TODO: Remove this duplicity
     #[derive(Clone)]
     enum HashAlgorithm {
         Xxh64,
         Xxh3,
     }
     impl HashAlgorithm {
+        #[allow(dead_code)]
         fn from_str(s: &str) -> Option<Self> {
+            match s.to_lowercase().as_str() {
+                "xxh64" => Some(HashAlgorithm::Xxh64),
+                "xxh3" => Some(HashAlgorithm::Xxh3),
+                _ => None,
+            }
+        }
+        fn from_string(s: String) -> Option<Self> {
             match s.to_lowercase().as_str() {
                 "xxh64" => Some(HashAlgorithm::Xxh64),
                 "xxh3" => Some(HashAlgorithm::Xxh3),
@@ -79,7 +95,7 @@ pub mod hashindex_rs {
     pub async fn run_workers(
         label: String,
         delimiter: String,
-        hash_algorithms: Vec<&str>,
+        hash_algorithms: Vec<String>,
         receive: channel::Receiver<PathBuf>,
         number_of_workers: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -94,7 +110,7 @@ pub mod hashindex_rs {
 
         let hash_algorithms: Vec<HashAlgorithm> = hash_algorithms
             .into_iter()
-            .filter_map(HashAlgorithm::from_str)
+            .filter_map(HashAlgorithm::from_string)
             .collect();
 
         for _ in 0..number_of_workers {
@@ -201,7 +217,6 @@ mod tests {
     fn bad_path() {
         let path = "invalid Path which will not resolve in any real path";
         let delimiter = ",";
-        let hash_algorithms = vec!["xxh64", "xxh3"];
 
         let (sender, receiver) = prepare_channel();
         smol::block_on(async {
@@ -209,7 +224,7 @@ mod tests {
                 hashindex_rs::run_workers(
                     "label".into(),
                     delimiter.into(),
-                    hash_algorithms,
+                    hashindex_rs::hash_variants(),
                     receiver,
                     1
                 ),
@@ -221,11 +236,10 @@ mod tests {
 
     #[test]
     fn valid_path() {
-        let (_, temp_path) = make_temp_file();
+        let (_temp_file, temp_path) = make_temp_file();
 
         let path = temp_path.to_str().unwrap();
         let delimiter = ",";
-        let hash_algorithms = vec!["xxh64", "xxh3"];
 
         let (sender, receiver) = prepare_channel();
         smol::block_on(async {
@@ -233,7 +247,7 @@ mod tests {
                 hashindex_rs::run_workers(
                     "label".into(),
                     delimiter.into(),
-                    hash_algorithms,
+                    hashindex_rs::hash_variants(),
                     receiver,
                     1
                 ),
@@ -254,7 +268,6 @@ mod tests {
         permissions.set_mode(0o000); // No permissions
         fs::set_permissions(&temp_path, permissions).unwrap();
         let delimiter = ",";
-        let hash_algorithms = vec!["xxh64", "xxh3"];
         let (sender, receiver) = prepare_channel();
 
         smol::block_on(async {
@@ -262,7 +275,7 @@ mod tests {
                 hashindex_rs::run_workers(
                     "label".into(),
                     delimiter.into(),
-                    hash_algorithms,
+                    hashindex_rs::hash_variants(),
                     receiver,
                     1
                 ),
