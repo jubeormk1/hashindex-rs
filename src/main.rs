@@ -32,6 +32,10 @@ struct Arguments {
     /// use comma separater list such as --hash-list xxh64,xxh3 or --hash-list "xxh64, xxh3"
     #[argh(option, short = 'h')]
     hash_list: Option<String>,
+
+    /// number of jobs to use to compute hashes. defaults to the number of cores
+    #[argh(option, short = 'j')]
+    jobs: Option<usize>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,8 +62,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => vec![hashindex_rs::default_hash()],
     };
 
-    // TODO: Add a parameter to choose the number of workers
-    let number_of_workers = num_cpus::get();
+    let number_of_workers = match args.jobs {
+        Some(jobs) => jobs,
+        None => num_cpus::get(),
+    };
 
     let (sender, receive) = channel::bounded(number_of_workers);
 
