@@ -61,8 +61,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: Add a parameter to choose the number of workers
     let number_of_workers = num_cpus::get();
 
-    // TODO: List the file size as another field as a number of bytes
-
     let (sender, receive) = channel::bounded(number_of_workers);
 
     smol::block_on(async {

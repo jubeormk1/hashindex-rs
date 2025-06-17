@@ -99,12 +99,7 @@ pub mod hashindex_rs {
         receive: channel::Receiver<PathBuf>,
         number_of_workers: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        //TODO: Make this sanitation more compact
-        let number_of_workers = if number_of_workers == 0 {
-            1
-        } else {
-            number_of_workers
-        };
+        let number_of_workers = number_of_workers.max(1);
 
         let mut workers = Vec::with_capacity(number_of_workers);
 
@@ -136,6 +131,7 @@ pub mod hashindex_rs {
         Ok(())
     }
 
+    /// Worker function to print the properties selected of a file that is received via a channel
     async fn work_print(
         label: String,
         delimiter: String,
@@ -154,8 +150,14 @@ pub mod hashindex_rs {
                             continue;
                         }
                     };
-
-                    println!("{label:}{delimiter}{hash:}{delimiter}{path_buf:?}");
+                    let size = match path_buf.metadata() {
+                        Ok(md) => md.len(),
+                        Err(err) => {
+                            eprintln!("Failed to obtain size for {path_buf:?}: {err}");
+                            continue;
+                        }
+                    };
+                    println!("{label:}{delimiter}{hash:}{delimiter}{size:}{delimiter}{path_buf:?}");
                 }
             };
             if task_receiver.is_closed() {
